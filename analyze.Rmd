@@ -1,0 +1,90 @@
+---
+title: "STAT231 (Data Science) College Scorecard Analysis"
+author: 'Oliver, Shu, and Aaron'
+date: '9/22/18'
+output:
+  pdf_document:
+    fig_height: 3
+    fig_width: 5
+  html_document:
+    fig_height: 3
+    fig_width: 5
+  word_document:
+    fig_height: 3
+    fig_width: 5
+---
+  
+```{r, setup, include=FALSE}
+library(mosaic)   # Load additional packages here 
+# Some customization.  You can alter or delete as desired (if you know what you are doing).
+trellis.par.set(theme=theme.mosaic()) # change default color scheme for lattice
+knitr::opts_chunk$set(
+  tidy=FALSE,     # display code as typed
+  size="small")   # slightly smaller font for code
+```
+
+```{r include=FALSE, message=FALSE}
+load("scorecard_clean.Rda")
+```
+
+```{r include = FALSE, message=FALSE}
+# This function creates a basic plot of US states that compares a value 'cfill' across the states
+MapPlot <- function(ds, cfill) {
+  ggplot(ds, aes(x = long, y = lat, fill = !! sym(cfill), group = group), color = "white") + 
+    coord_fixed(1.3) +
+    geom_polygon(alpha = 0.7) +
+    geom_polygon(color = "black", fill = NA) +
+    theme_bw() +
+    theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text = element_blank(),
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    panel.border = element_blank(),
+    panel.grid = element_blank(),
+    axis.title = element_blank()
+  )
+}
+```
+
+## Question/Hypothesis
+An important societal issue, and one that is increasingly in public view, is how colleges provide oppurtunities for students from lower class backgrounds to move up the socioeconomic ladder. Much attention is payed to differences between elite private institutions and larger, public ones (see this nytimes article for example https://www.nytimes.com/interactive/2017/01/18/upshot/some-colleges-have-more-students-from-the-top-1-percent-than-the-bottom-60.html) however, we want to look at how poor students in different states both have access to and gain economically from a secondary education.
+
+We suspect that there will be some noticeable patterns between different regions of the country, just as there is variation in income, education, race, and economic activity between different parts of the US.
+
+## Plot
+
+First, we looked at what proportion of a states title-IV eligable (essentially those who qualify for federal financial aid) students came from households with a family income of under $30,000 a year.
+
+```{r echo = FALSE, fig.align = "center", fig.height = 6, fig.width = 6, message=FALSE}
+# Maps the BLW data
+MapPlot(scorecard_clean, "BLW") +
+  scale_fill_gradient("Prop. Students", low="green", high="brown") +
+  labs(
+  title = "Proportion of Students with \n Family Income Under $30,000 by State"
+  )
+```
+
+Interestingly there is a great deal of variation by geographic region within the US. The Midwest and New England had the lowest proportion of sub $30k income students, while the deep south had the highest proportion. Specifically Louisiana has the highest proportion at about 0.7.
+
+
+Next, we looked at how getting some kind of secondary education affected the earnings of graduates. Using data for students six years after graduation we again looked at students from households with an income less than $30,000. Within each state, the mean earnings after six years is calculated and divided by the Per-Capita income for the state to adjust for different incomes and costs in different states.
+
+```{r echo = FALSE, fig.align = "center", fig.height = 6, fig.width = 6, message=FALSE}
+# Maps the GRAD_vs_AVG data
+MapPlot(scorecard_clean, "GRAD_vs_AVG") +
+  scale_fill_gradient("Proportion", low="yellow", high="blue") +
+  labs(
+  title = "Mean Wage of College Graduates \n Six Years After Graduation \n As Proportion of Per-Capita Income for State"  
+  )
+```
+
+In this second graphic there is a similar geographic relationship between the earnings to PCI ratio. The Northeast, especially populous coastal states has a much lower proportion, with grads actually earning, on average, slightly lower than the PCI. On the other hand, with the South and some non-coastal Western states, there is a signifcant, immediate earnings advantage to those who have completed some form of secondary schooling.
+
+## Conclusion/Interpretation
+
+The first map looks at the percent of student body on financial aid with families with under 30k annual income. The second map then examines the mean wage for the same students 6 years after graduation. It is clear that for whatever reason, certain states in the US have many more students coming from families around or below the poverty line. These states tend to be southern or western, and not very populous. States in the midwest or northeast had the lowest proportion of students on financial aid coming from these extremely poor baclgrounds. We do not have absolute numbers for students in each state (we only have a proportion of the total student population) but it would appear that these states with a higher proportion either attract more low income students, have more low income students, or provide better acess to large scale educational oppurtunities to these students.
+
+Interestingly though, in many of the areas with many very poor students recieving financial aid, there is an significant earnings gain to having a college degree by only six years after graduation. These are likely in less educated regions where a college degree imediately differentiates grauates in the work pool. On the other hand, in wealthy states like New York and Massachusets, even six years after graduation a typical student who attended school in that state is still below the Per-Capita average, suggesting that there are many other college graduates and jobs that financially reward people in a timeframe beyond just six years.
+
+It’s important to note that we aren’t sorting by or controlling for what type of school (or the acceptance rate of schools) these students are attending. This means that we lose out on some important information, such as a potential relationship between lower acceptance rates and higher mean wages after graduation. Furthermore, the analysis does not look too much into students moving between states after graduation, which could affect the results of the data similarly.

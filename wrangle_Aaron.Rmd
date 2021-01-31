@@ -1,0 +1,153 @@
+---
+title: "STAT231 (Data Science) College Scorecard Wrangling"
+author: "XX"
+date: "YY"
+output:
+  html_document:
+    fig_height: 3
+    fig_width: 5
+  pdf_document:
+    fig_height: 3
+    fig_width: 5
+  word_document:
+    fig_height: 3
+    fig_width: 5
+---
+
+```{r, setup, include=FALSE}
+library(mosaic)   # Load additional packages here 
+library(ggplot2)
+library(ggmap)
+library(maps)
+library(mapdata)
+library(rlang)
+# Some customization.  You can alter or delete as desired (if you know what you are doing).
+trellis.par.set(theme=theme.mosaic()) # change default color scheme for lattice
+knitr::opts_chunk$set(
+  tidy=FALSE,     # display code as typed
+  size="small")   # slightly smaller font for code
+```
+
+This file wrangles the data and saves the results to a file.  It should only need to be run once per group. 
+The file `analyze.Rmd` reads the saved `.Rda` created here and analyzes it.
+
+```{r message=FALSE}
+library(mosaic)
+library(readr)
+getwd()
+location <- "/home/faculty/nhorton/www/html/scorecard"
+# list.files(location)
+scorecard <- read_csv(paste(location, "MERGED2005_06_PP.csv", sep="/"))
+```
+
+Clean up and wrangle the file. You'll likely need to iterate on this file as you investigate the data and finalize your analytic dataset.
+
+```{r message = FALSE}
+# Under 30k
+scorecard <- mutate(scorecard, 
+                    INC_PCT_LO = readr::parse_number(INC_PCT_LO))
+# 30k-48k
+scorecard <- mutate(scorecard, 
+                    INC_PCT_M1 = readr::parse_number(INC_PCT_M1))
+# 48k-75k
+scorecard <- mutate(scorecard, 
+                    INC_PCT_M2 = readr::parse_number(INC_PCT_M2))
+# 75k-110k
+scorecard <- mutate(scorecard, 
+                    INC_PCT_H1 = readr::parse_number(INC_PCT_H1))
+# Over 110k
+scorecard <- mutate(scorecard, 
+                    INC_PCT_H2 = readr::parse_number(INC_PCT_H2))
+scorecard <- mutate(scorecard, 
+                    GT_25K_P6 = readr::parse_number(GT_25K_P6))
+scorecard <- mutate(scorecard, 
+                    GT_25K_P8 = readr::parse_number(GT_25K_P8))
+# Under 30k
+scorecard <- mutate(scorecard, 
+                    MN_EARN_WNE_INC1_P6 = readr::parse_number(MN_EARN_WNE_INC1_P6))
+# 30k-75k
+scorecard <- mutate(scorecard, 
+                    MN_EARN_WNE_INC2_P6 = readr::parse_number(MN_EARN_WNE_INC2_P6))
+# above 75k
+scorecard <- mutate(scorecard, 
+                    MN_EARN_WNE_INC3_P6 = readr::parse_number(MN_EARN_WNE_INC3_P6))
+```
+
+
+```{r}
+# Creates PCI data frame using PCI data for each state from Wikipedia
+PCI <- data.frame("Abb" = state.abb, "PCIncome" = c(23606,33062,25715,22883,30441,32357,39373,30488,26582,25615,29736,23938,30417,25140,28361,27870,23684,24800,27978,36338,36593,26613,32638,21036,26126,25989,27446,25773,34691,37288,23683,33095,25774,33071,26937,25229,27646,29220,30830,24596,26959,24922,27125,24877,29178,34052,31841,22714,28213,29698))
+```
+
+```{r}
+# Some functions for operations done multiple times
+
+# This function makes the entries in a dataframe numeric when possible, excepting a specif column number x
+MakeNum <- function(ds, x) {
+  for (i in c(1:ncol(ds))[-x]){
+    ds[i] <- as.numeric(ds[[i]])
+  }
+  return(ds)
+}
+
+# This function takes a dataframe with state abbreviations and adds geospatial data for each state
+MakeGeo <- function(ds) {
+  states <- map_data("state")
+  state_key <- data.frame(state.name, state.abb)
+  state_key[[1]] <- tolower(state_key[[1]])
+  states_keyed <- inner_join(states, state_key, by=c("region" = "state.name"))
+  return(inner_join(ds, states_keyed, by=c("STABBR" = "state.abb")))
+}
+
+```
+
+```{r}
+# Make the relevant entries numeric
+scorecard <- MakeNum(scorecard, 6)
+
+# Changes scorecard data to show percent of student body (with financial aid) with a family income under 30k
+BLW_data <- scorecard %>%
+  select(c(INC_PCT_LO, INC_PCT_M1, INC_PCT_M2, INC_PCT_H1, INC_PCT_H2, STABBR)) %>%
+  group_by(STABBR) %>%
+  summarise(BLW = (mean(INC_PCT_LO, na.rm = TRUE)), ABV = (mean(INC_PCT_H1, na.rm = TRUE)+mean(INC_PCT_H2, na.rm = TRUE)+mean(INC_PCT_M2, na.rm = TRUE)+mean(INC_PCT_M1, na.rm = TRUE)))
+
+# Changes scorecard data to show mean wage 6 years after grad. for students with family income under 30k, then adjusts this value for PCI
+MNW_data <- scorecard %>%
+  select(c(STABBR, MN_EARN_WNE_INC1_P6)) %>%
+  group_by(STABBR) %>%
+  summarise(WAGE = mean(MN_EARN_WNE_INC1_P6, na.rm=TRUE)) %>%
+  inner_join(PCI, by=c("STABBR"="Abb")) %>%
+  mutate(GRAD_vs_AVG = WAGE / PCIncome)
+
+# Merge both results with the geospatial data
+maps_data <- MakeGeo(BLW_data)
+maps_data2 <- MakeGeo(MNW_data)
+
+# Merge all data together again into a new scorecard dataset
+scorecard_clean <- full_join(maps_data, maps_data2, by=c("STABBR","long","lat","group","order","region","subregion")) 
+
+```
+
+```{r}
+# Maps the BLW data
+MapPlot(scorecard_temp, "BLW") +
+  scale_fill_gradient("Prop. Students", low="green", high="brown") +
+  labs(
+  title = "Proportion of Students with Family Income Under $30,000 by State"
+  )
+
+# Maps the GRAD_vs_AVG data
+MapPlot(scorecard_temp, "GRAD_vs_AVG") +
+  scale_fill_gradient("Proportion", low="yellow", high="blue") +
+  labs(
+  title = "Mean Wage of College Graduates Six Years After Graduation \n As Proportion of Per-Capita Income for State"  
+  )
+  
+```
+
+Save the scorecard object into a file on disk. 
+```{r}
+save(scorecard_clean, file="scorecard_clean.Rda")
+```
+
+Your mission: adapt this code to use data from the College Scorecard data to answer a question.  This file should contain all of the data wrangling to create an analytic dataset that can be analyzed in the other files.
